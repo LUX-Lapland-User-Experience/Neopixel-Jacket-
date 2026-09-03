@@ -1,0 +1,373 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Jacket controller</title>
+<style>
+  :root {
+    --bg: #0F1113;
+    --surface: #1A1D21;
+    --surface-2: #22262B;
+    --border: #2A2E33;
+    --text: #ECEDEE;
+    --text-dim: #9A9FA6;
+    --accent-on: #3ECF8E;
+    --accent-off: #6B6F76;
+    --accent-error: #E2574C;
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body {
+    margin: 0; padding: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, system-ui, "Segoe UI", Roboto, sans-serif;
+    min-height: 100vh;
+  }
+  .wrap { max-width: 480px; margin: 0 auto; padding: 16px 16px 32px; }
+
+  header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 8px 0 20px;
+  }
+  h1 { font-size: 18px; font-weight: 500; margin: 0; }
+  .status-row { display: flex; align-items: center; gap: 8px; }
+  .dot {
+    width: 9px; height: 9px; border-radius: 50%;
+    background: var(--accent-off);
+    transition: background 0.2s;
+  }
+  .dot.connected { background: var(--accent-on); }
+  .dot.error { background: var(--accent-error); }
+  .status-text { font-size: 13px; color: var(--text-dim); min-width: 78px; }
+  button.connect {
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    color: var(--text);
+    font-size: 14px;
+    padding: 8px 14px;
+    border-radius: 8px;
+    cursor: pointer;
+  }
+  button.connect:active { background: var(--border); }
+
+  section { margin-bottom: 22px; }
+  .label {
+    font-size: 13px;
+    color: var(--text-dim);
+    margin: 0 0 10px 2px;
+  }
+
+  .segmented {
+    display: flex;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 3px;
+  }
+  .segmented button {
+    flex: 1;
+    background: transparent;
+    border: none;
+    color: var(--text-dim);
+    font-size: 14px;
+    padding: 10px 0;
+    border-radius: 7px;
+    cursor: pointer;
+  }
+  .segmented button.active {
+    background: var(--surface-2);
+    color: var(--text);
+  }
+
+  .swatch-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 10px;
+  }
+  .swatch {
+    aspect-ratio: 1.3;
+    border-radius: 12px;
+    border: 1px solid var(--border);
+    cursor: pointer;
+    display: flex;
+    align-items: flex-end;
+    padding: 8px;
+    font-size: 12px;
+    font-weight: 500;
+  }
+  .swatch:active { filter: brightness(0.9); }
+
+  .mode-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 10px;
+  }
+  .mode-btn {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    color: var(--text);
+    font-size: 14px;
+    padding: 14px 0;
+    border-radius: 10px;
+    cursor: pointer;
+  }
+  .mode-btn:active { background: var(--surface-2); }
+  .mode-btn.off { color: var(--accent-error); }
+
+  .slider-row {
+    display: flex; align-items: center; gap: 12px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 12px 14px;
+  }
+  input[type=range] { flex: 1; accent-color: var(--accent-on); }
+  .slider-value {
+    font-variant-numeric: tabular-nums;
+    font-size: 14px;
+    color: var(--text-dim);
+    min-width: 34px;
+    text-align: right;
+  }
+
+  .log-header {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 10px;
+  }
+  .log-clear {
+    background: none;
+    border: none;
+    color: var(--text-dim);
+    font-size: 13px;
+    cursor: pointer;
+    padding: 4px;
+  }
+  .log {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 10px 12px;
+    height: 160px;
+    overflow-y: auto;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 12px;
+    line-height: 1.6;
+  }
+  .log-line { display: flex; gap: 8px; color: var(--text-dim); }
+  .log-line .t { color: #5C6167; flex-shrink: 0; }
+  .log-line.sent .m { color: var(--text); }
+  .log-line.recv .m { color: var(--accent-on); }
+  .log-line.err .m { color: var(--accent-error); }
+  .log-empty { color: #5C6167; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <h1>Jacket controller</h1>
+    <div class="status-row">
+      <span class="dot" id="dot"></span>
+      <span class="status-text" id="statusText">Not connected</span>
+      <button class="connect" id="connectBtn">Connect</button>
+    </div>
+  </header>
+
+  <section>
+    <div class="label">Target</div>
+    <div class="segmented" id="targetSeg">
+      <button data-target="l">Left</button>
+      <button data-target="r">Right</button>
+      <button data-target="a" class="active">Both</button>
+    </div>
+  </section>
+
+  <section>
+    <div class="label">Color</div>
+    <div class="swatch-grid" id="swatchGrid"></div>
+  </section>
+
+  <section>
+    <div class="label">Mode</div>
+    <div class="mode-grid">
+      <button class="mode-btn" data-mode="1">Rainbow</button>
+      <button class="mode-btn" data-mode="2">Chase</button>
+      <button class="mode-btn" data-mode="3">Breathe</button>
+      <button class="mode-btn off" data-mode="4">Off</button>
+    </div>
+  </section>
+
+  <section>
+    <div class="label">Brightness</div>
+    <div class="slider-row">
+      <input type="range" id="brightness" min="1" max="100" value="60">
+      <span class="slider-value" id="brightnessValue">60</span>
+    </div>
+  </section>
+
+  <section>
+    <div class="log-header">
+      <div class="label" style="margin:0">Log</div>
+      <button class="log-clear" id="clearLog">Clear</button>
+    </div>
+    <div class="log" id="log">
+      <div class="log-empty">Nothing sent yet</div>
+    </div>
+  </section>
+
+</div>
+
+<script>
+const NUS_SERVICE = '6e400001-b5a3-f393-e0a9-e50e24dcca9e';
+const NUS_RX      = '6e400002-b5a3-f393-e0a9-e50e24dcca9e'; // write, app -> jacket
+const NUS_TX      = '6e400003-b5a3-f393-e0a9-e50e24dcca9e'; // notify, jacket -> app
+
+const SWATCHES = [
+  { name: 'Red',    r: 255, g: 0,   b: 0   },
+  { name: 'Green',  r: 0,   g: 255, b: 0   },
+  { name: 'Blue',   r: 0,   g: 0,   b: 255 },
+  { name: 'Amber',  r: 255, g: 130, b: 0   },
+  { name: 'Purple', r: 160, g: 0,   b: 220 },
+  { name: 'White',  r: 255, g: 255, b: 255 },
+];
+
+let device = null;
+let rxChar = null;
+let target = 'a';
+
+const dot = document.getElementById('dot');
+const statusText = document.getElementById('statusText');
+const connectBtn = document.getElementById('connectBtn');
+const logEl = document.getElementById('log');
+const swatchGrid = document.getElementById('swatchGrid');
+
+function textColorFor(r, g, b) {
+  const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+  return luminance > 0.6 ? '#111' : '#fff';
+}
+
+SWATCHES.forEach(s => {
+  const btn = document.createElement('button');
+  btn.className = 'swatch';
+  btn.style.background = `rgb(${s.r},${s.g},${s.b})`;
+  btn.style.color = textColorFor(s.r, s.g, s.b);
+  btn.textContent = s.name;
+  btn.addEventListener('click', () => sendColor(s.r, s.g, s.b));
+  swatchGrid.appendChild(btn);
+});
+
+document.querySelectorAll('#targetSeg button').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('#targetSeg button').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    target = btn.dataset.target;
+    sendCommand(target); // sets target on the device without changing color
+  });
+});
+
+document.querySelectorAll('.mode-btn').forEach(btn => {
+  btn.addEventListener('click', () => sendCommand(`m ${btn.dataset.mode}`));
+});
+
+const brightness = document.getElementById('brightness');
+const brightnessValue = document.getElementById('brightnessValue');
+let brightnessTimeout = null;
+brightness.addEventListener('input', () => {
+  brightnessValue.textContent = brightness.value;
+  clearTimeout(brightnessTimeout);
+  brightnessTimeout = setTimeout(() => sendCommand(`b ${brightness.value}`), 120);
+});
+
+document.getElementById('clearLog').addEventListener('click', () => {
+  logEl.innerHTML = '<div class="log-empty">Nothing sent yet</div>';
+});
+
+function sendColor(r, g, b) {
+  sendCommand(`${target} ${r} ${g} ${b}`);
+}
+
+function logLine(kind, message) {
+  const empty = logEl.querySelector('.log-empty');
+  if (empty) empty.remove();
+  const time = new Date().toLocaleTimeString([], { hour12: false });
+  const row = document.createElement('div');
+  row.className = `log-line ${kind}`;
+  row.innerHTML = `<span class="t">${time}</span><span class="m">${message}</span>`;
+  logEl.appendChild(row);
+  logEl.scrollTop = logEl.scrollHeight;
+}
+
+function setStatus(state, label) {
+  dot.className = `dot ${state}`;
+  statusText.textContent = label;
+}
+
+async function sendCommand(cmd) {
+  if (!rxChar) {
+    logLine('err', `not connected — "${cmd}" not sent`);
+    return;
+  }
+  try {
+    const bytes = new TextEncoder().encode(cmd + '\n');
+    await rxChar.writeValue(bytes);
+    logLine('sent', cmd);
+  } catch (e) {
+    logLine('err', `send failed: ${e.message}`);
+  }
+}
+
+function handleNotify(event) {
+  const text = new TextDecoder().decode(event.target.value).trim();
+  if (text) logLine('recv', text);
+}
+
+async function connect() {
+  try {
+    setStatus('', 'Requesting…');
+    device = await navigator.bluetooth.requestDevice({
+      filters: [{ services: [NUS_SERVICE], namePrefix: 'Feather' }]
+    });
+    device.addEventListener('gattserverdisconnected', onDisconnected);
+
+    setStatus('', 'Connecting…');
+    const server = await device.gatt.connect();
+    const service = await server.getPrimaryService(NUS_SERVICE);
+    rxChar = await service.getCharacteristic(NUS_RX);
+    const txChar = await service.getCharacteristic(NUS_TX);
+
+    await txChar.startNotifications();
+    txChar.addEventListener('characteristicvaluechanged', handleNotify);
+
+    setStatus('connected', device.name || 'Connected');
+    connectBtn.textContent = 'Disconnect';
+    logLine('recv', `connected to ${device.name || 'device'}`);
+  } catch (e) {
+    setStatus('error', 'Connection failed');
+    logLine('err', e.message);
+  }
+}
+
+function onDisconnected() {
+  rxChar = null;
+  setStatus('', 'Not connected');
+  connectBtn.textContent = 'Connect';
+  logLine('err', 'disconnected');
+}
+
+connectBtn.addEventListener('click', () => {
+  if (device && device.gatt.connected) {
+    device.gatt.disconnect();
+  } else {
+    connect();
+  }
+});
+
+if (!navigator.bluetooth) {
+  setStatus('error', 'No Web Bluetooth');
+  logLine('err', 'This browser does not support Web Bluetooth. Use Chrome on Android.');
+  connectBtn.disabled = true;
+}
+</script>
+</body>
+</html>
